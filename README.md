@@ -35,7 +35,7 @@ The `transform.py` script creates three output directories:
 Fine-tune a `GPT-2` model with this script:
 ```bash
 python train.py \
-    --data_dir data/cell_sentences/ \
+    --data_dir data/cell_sentences_hf/ \
     --output_dir <your_output_dir> \
     --model_name gpt2 \
     --num_train_epochs 10 \
