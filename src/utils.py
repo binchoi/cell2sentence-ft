@@ -6,6 +6,8 @@ import os
 import sys
 from collections import OrderedDict
 from pathlib import Path
+from typing import List
+from collections import Counter
 
 import numpy as np
 from scipy import sparse
@@ -206,3 +208,108 @@ def xlm_prepare_outpath(csdata, outpath, species_tag, params=None):
     with open(fn, "w") as f:
         for l in tqdm(csdata.cell_names[val]):
             print(l, file=f)
+
+
+def post_process_generated_cell_sentences(
+    cell_sentence: str,
+    global_dictionary: List,
+    replace_nonsense_string: str = "NOT_A_GENE",
+):
+    """
+    Post-processing function for generated cell sentences. Nonsense genes are replaced with 
+    some string, e.g. 'NOT_A_GENE', so that ranks are not changed in generated output.
+
+    Current assumptions in this function:
+        - We replace nonsense genes with some string, e.g. 'NOT_A_GENE', so that ranks are not
+            changed in generated output.
+
+    Steps:
+        1. Replace any nonsense genes with a specified token, e.g. 'NOT_A_GENE'
+        2. Average the ranks of duplicated genes in generated sentence
+
+    Arguments:
+        cell_sentence:              generated cell sentence string
+        global_dictionary:          list of global gene vocabulary (all uppercase)
+        replace_nonsense_string:    string which will replace nonsense genes in generated output
+
+    Returns:
+        post_processed_sentence:    generated cell sentence after post processing steps
+        num_nonsense_genes:         number of genes replaced with defined nonsense token
+    """
+    generated_gene_names = cell_sentence.split(" ")
+    generated_gene_names = [generated_gene.upper() for generated_gene in generated_gene_names]
+
+    # --- Replace nonsense genes ---#
+    generated_gene_names = [
+        gene_name if gene_name in global_dictionary else replace_nonsense_string
+        for gene_name in generated_gene_names
+    ]
+    num_genes_replaced = generated_gene_names.count(replace_nonsense_string)
+
+    # --- Average ranks ---#
+    gene_name_to_occurrences = Counter(
+        generated_gene_names
+    )  # get mapping of gene name --> number of occurrences
+    post_processed_sentence = generated_gene_names.copy()  # copy of generated gene list
+
+    for gene_name in gene_name_to_occurrences:
+        if (
+            gene_name_to_occurrences[gene_name] > 1
+            and gene_name != replace_nonsense_string
+        ):
+            # Find positions of all occurrences of duplicated generated gene in list
+            # Note: using post_processed_sentence here; since duplicates are being removed, list will be
+            #   getting shorter. Getting indices in original list will no longer be accurate positions
+            occurrence_positions = [
+                idx
+                for idx, elem in enumerate(post_processed_sentence)
+                if elem == gene_name
+            ]
+            average_position = int(
+                sum(occurrence_positions) / len(occurrence_positions)
+            )
+
+            # Remove occurrences
+            post_processed_sentence = [
+                elem for elem in post_processed_sentence if elem != gene_name
+            ]
+            # Reinsert gene_name at average position
+            post_processed_sentence.insert(
+                average_position, gene_name
+            )
+
+    return post_processed_sentence, num_genes_replaced
+
+
+def convert_cell_sentence_back_to_expression_vector(
+    cell_sentence: List, global_dictionary: List, slope: float, intercept: float
+):
+    """
+    Function to convert
+
+    Current assumptions in this function:
+        - We replace nonsense genes with some string, e.g. 'NOT_A_GENE', so that ranks are not
+            changed in generated output.
+
+    Steps:
+        1. Replace any nonsense genes with a specified token, e.g. 'nan'
+        2. Average the ranks of duplicated genes in generated sentence
+
+    Arguments:
+        cell_sentence:              generated cell sentence list, e.g. ['GENE1', 'GENE2']
+        global_dictionary:          list of global gene vocabulary
+        slope:                      slope value to use in inverse rank->expression transformation
+        intercept:                  intercept value to use in inverse rank->expression transformation
+
+    Returns:
+        expression_vector:          expression vector for generated cell
+    """
+    expression_vector = np.zeros(len(global_dictionary), dtype=np.float32)
+    for rank, gene_name in enumerate(cell_sentence):
+        if gene_name in global_dictionary:
+            log_rank = np.log10(1 + rank).item()
+            gene_expr_val = intercept + (slope * log_rank)
+            gene_idx_in_vector = global_dictionary.index(gene_name)
+            expression_vector[gene_idx_in_vector] = gene_expr_val
+
+    return expression_vector
