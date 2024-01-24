@@ -10,7 +10,7 @@ import scanpy as sc
 import sklearn.linear_model as lm
 from datasets import Dataset, load_dataset, concatenate_datasets
 from scipy.stats import pearsonr, spearmanr
-from sklearn.metrics import r2_score
+from sklearn.metrics import r2_score, mean_squared_error
 from sklearn.utils import shuffle
 from tqdm import tqdm
 
@@ -105,6 +105,8 @@ def evaluate_transformation(df, plotting_sample_size=10000):
         np.asarray(df["log_preprocessed_transcript_count"]),
         np.asarray(rank_reconstructed_X),
     )
+    adjusted_r_squared_score = 1 - (1 - r_squared_score) * (len(y) - 1) / (len(y) - x.shape[1] - 1)
+
     pearson_r_score = pearsonr(
         np.asarray(df["log_preprocessed_transcript_count"]),
         np.asarray(rank_reconstructed_X),
@@ -113,6 +115,8 @@ def evaluate_transformation(df, plotting_sample_size=10000):
         np.asarray(df["log_preprocessed_transcript_count"]),
         np.asarray(rank_reconstructed_X),
     )
+
+    rmse = np.sqrt(mean_squared_error(df["log_preprocessed_transcript_count"], rank_reconstructed_X))
 
     reconstructed_expr_values_df = pd.DataFrame(
         {
@@ -149,10 +153,12 @@ def evaluate_transformation(df, plotting_sample_size=10000):
             "slope": [reg.coef_.item()],
             "intercept": [reg.intercept_.item()],
             "R^2": [r_squared_score.item()],
+            "Adjusted_R^2": [adjusted_r_squared_score.item()],
             "Pearson_R_statistic": [pearson_r_score.statistic.item()],
             "Pearson_R_p_value": [pearson_r_score.pvalue.item()],
             "Spearman_R_statistic": [spearman_r_score.statistic.item()],
             "Spearman_R_p_value": [spearman_r_score.pvalue.item()],
+            "RMSE": [rmse.item()],
         }
     )
     metrics_df.to_csv(
