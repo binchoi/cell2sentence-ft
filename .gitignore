@@ -4,6 +4,7 @@
 # custom ignores
 data/
 wandb/
+outputs/
 .empty/
 
 ### JupyterNotebooks ###
