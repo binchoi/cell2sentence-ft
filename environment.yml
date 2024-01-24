@@ -22,7 +22,6 @@ dependencies:
   - wandb
   - pytorch
   - torchvision
-  - pytorch-cuda=11.7
   - python-igraph
   - accelerate
   - igraph
